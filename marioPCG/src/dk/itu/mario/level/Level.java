@@ -352,8 +352,9 @@ public class Level implements LevelInterface
 		int hash = 0;
 		for(byte[] row : member){
 			for (byte col : row){
-				hash = hash + HASH_OFFSET
+				hash = hash + HASH_OFFSET;
 			}
 		}
+		return hash;
 	}
 }
