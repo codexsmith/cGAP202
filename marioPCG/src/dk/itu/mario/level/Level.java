@@ -2,16 +2,29 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map.Entry;
+import java.util.Random;
 
 import dk.itu.mario.MarioInterface.LevelInterface;
 import dk.itu.mario.engine.sprites.SpriteTemplate;
 
+/**The Level class now functions as a container for the distribution of levels produced from the genetic algorithm.
+ * These levels are kept in the population, and statistics are recorded over time. When the Level is queried for it's layout with getMap
+ * the result is a member from the population that most closely matches the player-profile calculations and historical trends.
+ * 
+ * The entire genetic algorithm is encapsulated  within this class, hiding behind the standard Level implementation. This means that
+ * instead of an large number of Level objects for each population produced by the GA, a single Level object is composed of a
+ * large population of 2D byte arrays.
+ * @author nix
+ *
+ */
 
 public class Level implements LevelInterface
 {
 
 	protected static final int HASH_SEED = 646;
 	protected static final int HASH_OFFSET = 91079;
+	
+	public static ArrayList<byte[][]> population = new ArrayList<byte[][]>(0); //perhaps a heap
 	
 	protected static ArrayList<Float> pop_history = new ArrayList<Float>();
 	protected static HashMap<Integer,Float> mem_history = new HashMap<Integer,Float>();
@@ -51,11 +64,14 @@ public class Level implements LevelInterface
     protected static final byte TUBE_SIDE_LEFT = (byte) (10 + 1 * 16);
     protected static final byte TUBE_SIDE_RIGHT = (byte) (11 + 1 * 16);
     
-            
+    //For the Rhythm class, replaced at level creation with actual elements
+    //used like a struct, to define patterns to apply to levels during crossover in addition to the two parents
+    protected static final byte OUTLINE = (byte) (13 + 2 * 16);
+    
     //The level's width and height
     protected int width;
     protected int height;
-
+    
     //This map of WIDTH * HEIGHT that contains the level's design
     private byte[][] map;
 
@@ -65,9 +81,13 @@ public class Level implements LevelInterface
     //These are the place of the end of the level
     protected int xExit;
     protected int yExit;
-
+    
     public Level(){
-
+    	
+    }
+    
+    public Level(byte[][] new_map){
+    	map = new_map;
     }
 
     public Level(int width, int height)
@@ -195,8 +215,18 @@ public class Level implements LevelInterface
 			System.out.println();
 		}
     }
+    /**
+     * 
+     */
+    
 	public byte[][] getMap() {
-		return map;
+		int close =0;
+		//get player's desired entropy and find the 'closest' to that
+		//over or under is determined by the history of population entropies
+		return population.get(close);
+	}
+	public void setMap(byte[][] new_map){
+		map = new_map;
 	}
 	public SpriteTemplate[][] getSpriteTemplates() {
 		return spriteTemplates;
@@ -222,15 +252,15 @@ public class Level implements LevelInterface
 		return "";
 	}
 
-	@Override
-	public byte[][] getMember(int mem) {
+	
+	public static byte[][] getMember(int mem) {
 		return population.get(mem);
 	}
 	
 	/**Count's total occurrences  of a variable in a pop and calculates a standard shannon entropy
 	 * IS NOT necessarily equivalent to successive applications of shannonMember due to precise entropy formula
 	 */
-	public float shannonPop(ArrayList<byte[][]> pop){
+	public static float shannonPop(ArrayList<byte[][]> pop){
 		float entropy = 0;
 		
 		if (!H_POP.isEmpty()){
@@ -281,7 +311,7 @@ public class Level implements LevelInterface
 		return entropy;
 	}
 	
-	@Override
+	
 	public float shannonSection( int beginRow, int endRow, int beginCol, int endCol){
 		return shannonPop(section(beginCol,endCol, beginRow, endRow));	
 	}
@@ -289,7 +319,7 @@ public class Level implements LevelInterface
 	/** _tally increases the count of the parameter byte in the desired histogram
 	 *  must MANUALLY reset histograms,if needed
 	 */
-	public void pop_tally(byte b) {
+	public static void pop_tally(byte b) {
 		if(H_POP.containsKey(Histogram.lookup(b))){
 			H_POP.put(Histogram.lookup(b), (Integer)H_POP.get(Histogram.lookup(b))+1);
 		}
@@ -297,8 +327,7 @@ public class Level implements LevelInterface
 			H_POP.put(Histogram.lookup(b), new Integer(1));
 		}
 	}
-	@Override
-	public void mem_tally(byte b) {
+	public static void mem_tally(byte b) {
 		if(H_MEM.containsKey(Histogram.lookup(b))){
 			H_MEM.put(Histogram.lookup(b),(Integer)H_MEM.get(Histogram.lookup(b))+1);
 		}
@@ -306,7 +335,7 @@ public class Level implements LevelInterface
 			H_MEM.put(Histogram.lookup(b), new Integer(1));
 		}
 	}
-	public void sec_tally(byte b) {
+	public static void sec_tally(byte b) {
 		if(H_SEC.containsKey(Histogram.lookup(b))){
 			H_SEC.put(Histogram.lookup(b),(Integer)H_SEC.get(Histogram.lookup(b))+1);
 		}
@@ -316,20 +345,19 @@ public class Level implements LevelInterface
 		
 	}
 
-	@Override
-	/**grab all cross sections of a level population 
-	 * 
+	/**grab a cross section of of members of a population. Starts with a zero index.  
+	 * DOES NOT copy the end element. 
 	 */
-	public ArrayList<byte[][]> section(int beginRow, int endRow, int beginCol, int endCol) { //
+	public static ArrayList<byte[][]> section(int beginRow, int endRow, int beginCol, int endCol) { //
 		ArrayList<byte[][]> cross_sections = new ArrayList<byte[][]>();
 		int rowI, colI;
 		
 		for (byte[][] member : population){//for each member of the population
 			byte[][] member_copy = new byte[member.length][endCol-beginCol];//create a copy holder
 			rowI = 0;
-			for (byte[] row : member){//for ALL rows
+			for (byte[] row : member){
 				colI = 0;
-				if(rowI >= beginRow && rowI < endRow){
+				if(rowI >= beginRow && rowI < endRow){//if a row is valid
 					for(byte col : row){
 						if(colI >= beginCol && colI < endCol){//if a col is valid copy it over
 							member_copy[rowI][colI-beginCol] = col;
@@ -343,18 +371,74 @@ public class Level implements LevelInterface
 		}
 		return cross_sections;
 	}
-
-	public static void selection(int begin, int end){
+	
+	/** The intuition between the 
+	 *  
+	 * @param scheme - distiguishes between various selection schemes. 
+	 * 	scheme >= 1 : step (stripe) applied equal to the scheme number 
+	 *  scheme == -1: random
+	 */
+	public static void selection(int scheme){
+		byte[][] child;
 		
+		if (scheme == -1){									
+			Random randA = new Random((long)(HASH_OFFSET * pop_history.get(pop_history.size())));
+			Random randB = new Random((long)(HASH_OFFSET * randA.nextLong()));
+			Random randR = new Random((long)(HASH_OFFSET * randB.nextLong()));
+			
+			child = crossover(population.get(randA.nextInt(population.size())),population.get(randB.nextInt(population.size())),Rhythm.rhythm(randR.nextInt(Rhythm.num_rhythm)));
+			
+			population.add(child);
+			
+			}
+		else{
+			
+		}
 	}
 	
-	private Integer hashMem(byte[][] member){
-		int hash = 0;
-		for(byte[] row : member){
-			for (byte col : row){
-				hash = hash + HASH_OFFSET;
-			}
+	/**
+	 * 
+	 * @param A - parent A
+	 * @param B - parent B
+	 * @param R - rhythm byte pattern
+	 * @return byte[][] child OR null on error
+	 */
+	public static byte[][] crossover(byte[][] A, byte[][] B, byte[][] R){
+			
+		//if the dimensions of A,B, and R are not equal
+		if(A.length != B.length || B.length != R.length || A[0].length != B[0].length || B[0].length != R[0].length){
+			return null;
 		}
-		return hash;
+		
+		byte[][] child = new byte[A.length][A[0].length];
+		
+		//column and row counters
+		int rowA = 0, colA = 0, rowB = 0, colB = 0, rowR = 0, colR = 0, rowC = 0, colC = 0;
+		
+		
+		for(byte[] row : R){
+			for (byte col : row){
+				if (col == OUTLINE){
+					
+				}//col == outline
+				colR++;
+			}//col
+		}//row
+		
+		
+		return child;
+	}
+	
+	public static Integer hashMem(byte[][] member){
+		int hash = HASH_SEED;
+		for (byte[] row : member){
+			for (byte col : row){
+				hash = hash * HASH_OFFSET * (int)col;
+				hash = hash * (HASH_OFFSET + (col % 2 == 0 ? hash : (int) col)); //note order of operations
+				hash = (hash * HASH_OFFSET) + (col % 2 == 0 ? (int)col : hash);  //and turnary outcomes
+			}
+			hash = hash/row.length;
+		}
+		return (Integer)hash;
 	}
 }
