@@ -220,7 +220,7 @@ public class Level implements LevelInterface
      */
     
 	public byte[][] getMap() {
-		int close =0;
+		int close = 0;
 		//get player's desired entropy and find the 'closest' to that
 		//over or under is determined by the history of population entropies
 		return population.get(close);
@@ -407,6 +407,7 @@ public class Level implements LevelInterface
 			
 		//if the dimensions of A,B, and R are not equal
 		if(A.length != B.length || B.length != R.length || A[0].length != B[0].length || B[0].length != R[0].length){
+			//return most fit parent, attempt to apply
 			return null;
 		}
 		
@@ -419,14 +420,20 @@ public class Level implements LevelInterface
 		for(byte[] row : R){
 			for (byte col : row){
 				if (col == OUTLINE){
-					
+					child[rowR][colR] = 
 				}//col == outline
 				colR++;
 			}//col
+			rowR++;
 		}//row
 		
 		
 		return child;
+	}
+	
+	public static byte choice(byte A, byte B){
+		
+		return A;
 	}
 	
 	public static Integer hashMem(byte[][] member){
