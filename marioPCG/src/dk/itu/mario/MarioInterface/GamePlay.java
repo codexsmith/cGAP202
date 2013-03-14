@@ -85,4 +85,49 @@ public class GamePlay implements Serializable {
 		}
 		return gp;
 	}
+	
+    public double playerEvaluate()        // and here
+    {
+        double playerXP=0.0; //0.0=noob, 0.3-0.7 average, 0.9-1.0 pro 
+        double weightBoredom=1.0;
+        double boredom=getBoredom();
+        playerXP+= -weightBoredom*boredom;
+        
+        double weightEnjoyment=1.0;
+        double enjoyment=getEnjoyment();
+        playerXP+= weightEnjoyment*enjoyment;
+        
+        playerXP+=1.0;
+        playerXP/=2;
+//        System.out.println("\nPlayer Experience: "+playerXP);
+        return playerXP;
+    }
+    
+    public double getBoredom()
+    {
+        double boredom=0.0;
+        int boredomCount=0;
+        boredom+= aimlessJumps/jumpsNumber;
+        boredomCount++;
+        boredom+= emptyBlocksDestroyed/totalEmptyBlocks;
+        boredomCount++;
+        boredom+= totalTime/200*3;        // Double check
+        boredomCount++;
+        if(boredomCount>0)
+            return (boredom/boredomCount);
+        return 0.0;
+    }
+    
+    public double getEnjoyment()
+    {
+        double enjoyment=0.0;
+        int enjoymentCount=0;
+        enjoyment+= (enemyKillByFire+enemyKillByKickingShell) /totalEnemies;
+        enjoymentCount++;
+        enjoyment+= percentageCoinBlocksDestroyed;
+        enjoymentCount++;
+        if(enjoymentCount>0)
+            return (enjoyment/enjoymentCount);
+        return 0.0;
+    }
 }

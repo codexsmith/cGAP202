@@ -28,15 +28,15 @@ public class MyLevel extends Level{
 	    private int type;
 		private int gaps;
 		
-		public MyLevel(int width, int height)
+		public MyLevel(int width, int height, GamePlay metrics)
 	    {
-			super(width, height);
+			super(width, height, metrics);
 	    }
 
 		
 		public MyLevel(int width, int height, long seed, int difficulty, int type, GamePlay playerMetrics)
 	    {
-	        this(width, height);
+	        this(width, height, playerMetrics);
 	        creat(seed, difficulty, type);
 	    }
 		

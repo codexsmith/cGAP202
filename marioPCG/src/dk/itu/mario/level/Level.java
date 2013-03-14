@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map.Entry;
 import java.util.Random;
 
+import dk.itu.mario.MarioInterface.GamePlay;
 import dk.itu.mario.MarioInterface.LevelInterface;
 import dk.itu.mario.engine.sprites.SpriteTemplate;
 
@@ -24,7 +25,8 @@ public class Level implements LevelInterface
 	protected static final int HASH_SEED = 646;
 	protected static final int HASH_OFFSET = 91079;
 	
-	public static ArrayList<byte[][]> population = new ArrayList<byte[][]>(0); //perhaps a heap
+	public static ArrayList<byte[][]> population = new ArrayList<byte[][]>(0); 
+	public static ArrayList<GamePlay> player_history = new ArrayList<GamePlay>(0);
 	
 	protected static ArrayList<Float> pop_history = new ArrayList<Float>();
 	protected static HashMap<Integer,Float> mem_history = new HashMap<Integer,Float>();
@@ -71,7 +73,7 @@ public class Level implements LevelInterface
     //The level's width and height
     protected int width;
     protected int height;
-    
+       
     //This map of WIDTH * HEIGHT that contains the level's design
     private byte[][] map;
 
@@ -90,15 +92,19 @@ public class Level implements LevelInterface
     	map = new_map;
     }
 
-    public Level(int width, int height)
+    public Level(int width, int height, GamePlay metrics)
     {
         this.width = width;
         this.height = height;
-
+        player_history.add(0,metrics);
+        
         xExit = 10;
         yExit = 10;
         map = new byte[width][height];
         spriteTemplates = new SpriteTemplate[width][height];
+        
+        //GA create here 
+        //handle enemies
     }
 
     public static void loadBehaviors(DataInputStream dis) throws IOException
@@ -115,8 +121,8 @@ public class Level implements LevelInterface
      *Clone the level data so that we can load it when Mario die
      */
     public Level clone() throws CloneNotSupportedException {
-
-        Level clone=new Level(width, height);
+    											//0 is most recent player history
+        Level clone=new Level(width, height, player_history.get(0));
 
         clone.map = new byte[width][height];
     	clone.spriteTemplates = new SpriteTemplate[width][height];
@@ -289,7 +295,7 @@ public class Level implements LevelInterface
 	 * while also meeting a players desired difficulty. This is a competitive system, designed to be chaotic in local space,
 	 * but probabilistic in definition.
 	 */
-	public float shannonMember(byte[][] member){
+	public static float shannonMember(byte[][] member){
 		float entropy = 0;
 		
 		if (!H_MEM.isEmpty()){
@@ -312,7 +318,7 @@ public class Level implements LevelInterface
 	}
 	
 	
-	public float shannonSection( int beginRow, int endRow, int beginCol, int endCol){
+	public static float shannonSection( int beginRow, int endRow, int beginCol, int endCol){
 		return shannonPop(section(beginCol,endCol, beginRow, endRow));	
 	}
 	
@@ -420,20 +426,45 @@ public class Level implements LevelInterface
 		for(byte[] row : R){
 			for (byte col : row){
 				if (col == OUTLINE){
-					child[rowR][colR] = 
+					child[rowR][colR] = (byte)((Level.shannonMember(A) > Level.shannonMember(B)) ? A [rowR][colR]: B[rowR][colR]);
+												//take the byte from the member with closer desired entropy
 				}//col == outline
 				colR++;
 			}//col
 			rowR++;
 		}//row
 		
+		for (byte[] row : child){
+			for(byte col : row){
+				if (col == 0){//if col doesnt have a value, evaluate and chose the closest
+					child[rowC][colC] = (byte)((Level.evaluate(A) < Level.evaluate(B)) ? A [rowR][colR]: B[rowR][colR]);
+				}
+				colC++;
+			}
+			rowC++;
+		}
 		
 		return child;
+		
 	}
 	
-	public static byte choice(byte A, byte B){
+	public static int[] bound(byte[][] A, int row){
 		
-		return A;
+	}
+	
+	/**Included to simplify changing the evaluation criteria
+	 * 
+	 * @param A
+	 * @return lower value is closer to desired 
+	 */
+	public static int evaluate(byte[][] A){
+		
+		double desired_entropy = player_history.get(0).playerEvaluate();
+		
+		float sectionA = Level.shannonSection(beginRow, endRow, beginCol, endCol);
+		
+		return (int) Math.abs(Level.shannonMember(A) - desired_entropy);
+		
 	}
 	
 	public static Integer hashMem(byte[][] member){
